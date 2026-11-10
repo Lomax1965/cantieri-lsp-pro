@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="it" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cantieri LSP-PRO.01 - LSP Impianti Tecnologici</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase Modular Scripts -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Configurazioni di sistema
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'cantieri-lsp-pro-01';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    window.FirebaseApp = {
+      appId,
+      db: null,
+      auth: null,
+      user: null,
+      init: async function(onReady) {
+        if (!firebaseConfig) {
+          console.warn("Firebase non configurato. Funzionamento in modalità locale / demo.");
+          onReady(null);
+          return;
+        }
+        try {
+          const app = initializeApp(firebaseConfig);
+          const auth = getAuth(app);
+          const db = getFirestore(app);
+          this.auth = auth;
+          this.db = db;
+
+          if (initialAuthToken) {
+            await signInWithCustomToken(auth, initialAuthToken);
+          } else {
+            await signInAnonymously(auth);
+          }
+
+          onAuthStateChanged(auth, (u) => {
+            this.user = u;
+            onReady(db);
+          });
+        } catch (e) {
+          console.error("Errore inizializzazione Firebase:", e);
+          onReady(null);
+        }
+      }
+    };
+
+    // Esposizione funzioni Firestore nel contesto globale per lo script classico
+    window.collection = collection;
+    window.doc = doc;
+    window.setDoc = setDoc;
+    window.onSnapshot = onSnapshot;
+    window.updateDoc = updateDoc;
+    window.deleteDoc = deleteDoc;
+    window.addDoc = addDoc;
+  </script>
+
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background-color: white !important; color: black !important; }
+      .print-area { box-shadow: none !important; border: none !important; background: white !important; color: black !important; }
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased bg-slate-950 text-slate-100 overflow-x-hidden">
+
+  <!-- HEADER AZIENDALE CON LOGO LSP -->
+  <header class="no-print bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-4 py-2.5 flex items-center justify-between shadow-lg">
+    
+    <!-- BRAND & LOGO LSP IMPIANTI TECNOLOGICI -->
+    <div class="flex items-center space-x-3">
+      <!-- LOGO AZIENDALE LSP ORIGINALE AD ALTA DEFINIZIONE -->
+      <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800 flex items-center justify-center shadow-inner">
+        <img src="LOGO TRASPARENTE TUTTO BIANCO.jpg" 
+             alt="LSP Impianti Tecnologici" 
+             class="h-8 sm:h-9 w-auto object-contain filter drop-shadow-[0_2px_4px_rgba(255,255,255,0.15)]"
+             onerror="this.onerror=null; this.src='https://placehold.co/180x50/0f172a/ffffff?text=LSP+IMPIANTI';">
+      </div>
+
+      <div class="hidden sm:block border-l border-slate-700 h-8"></div>
+
+      <div>
+        <h1 class="font-black text-base sm:text-lg text-slate-100 tracking-wide flex items-center space-x-1.5">
+          <span>Cantieri</span>
+          <span class="text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 text-xs font-mono">LSP-PRO.01</span>
+        </h1>
+        <p class="text-[10px] sm:text-xs text-slate-400">Piattaforma Integrata Cantiere & Ufficio</p>
+      </div>
+    </div>
+
+    <!-- SELEZIONE RUOLO & CANTIERE -->
+    <div class="flex items-center space-x-3">
+      <!-- RUOLO UTENTE -->
+      <div class="hidden md:flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1 text-xs">
+        <button onclick="setUserRole('cantiere')" id="roleBtnCantiere" class="px-2.5 py-1 rounded-md font-semibold transition bg-amber-500 text-slate-950">
+          👷 Cantiere
+        </button>
+        <button onclick="setUserRole('ufficio')" id="roleBtnUfficio" class="px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition">
+          🏢 Ufficio
+        </button>
+      </div>
+
+      <!-- SELETTORE CANTIERE -->
+      <div class="flex items-center space-x-1.5">
+        <select id="activeSiteSelect" onchange="changeActiveSite(this.value)" class="bg-slate-800 border border-slate-700 text-amber-400 font-bold text-xs sm:text-sm rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 max-w-[150px] sm:max-w-[220px]">
+          <!-- Opzioni popolate via JS -->
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENITORE PRINCIPALE -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- NAVIGATION BAR -->
+    <nav class="no-print bg-slate-900 border-r border-slate-800 w-full sm:w-64 flex-shrink-0 fixed sm:relative bottom-0 sm:bottom-auto z-30 flex sm:flex-col justify-around sm:justify-start p-2 sm:p-4 space-x-1 sm:space-x-0 sm:space-y-1.5 border-t sm:border-t-0 border-slate-800">
+      
+      <button onclick="switchTab('cantieri')" id="tab-cantieri" class="nav-btn flex flex-col sm:flex-row items-center sm:space-x-3 p-2 sm:px-3.5 sm:py-2.5 rounded-xl transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 w-full text-center sm:text-left">
+        <i data-lucide="building-2" class="w-5 h-5 mb-1 sm:mb-0"></i>
+        <span class="text-xs sm:text-sm font-medium">Cantieri</span>
+      </button>
+
+      <button onclick="switchTab('presenze')" id="tab-presenze" class="nav-btn flex flex-col sm:flex-row items-center sm:space-x-3 p-2 sm:px-3.5 sm:py-2.5 rounded-xl transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 w-full text-center sm:text-left">
+        <i data-lucide="clock" class="w-5 h-5 mb-1 sm:mb-0"></i>
+        <span class="text-xs sm:text-sm font-medium">Presenze & Ore</span>
+      </button>
+
+      <button onclick="switchTab('diario')" id="tab-diario" class="nav-btn flex flex-col sm:flex-row items-center sm:space-x-3 p-2 sm:px-3.5 sm:py-2.5 rounded-xl transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 w-full text-center sm:text-left">
+        <i data-lucide="notebook" class="w-5 h-5 mb-1 sm:mb-0"></i>
+        <span class="text-xs sm:text-sm font-medium">Diario Lavori</span>
+      </button>
+
+      <button onclick="switchTab('magazzino')" id="tab-magazzino" class="nav-btn flex flex-col sm:flex-row items-center sm:space-x-3 p-2 sm:px-3.5 sm:py-2.5 rounded-xl transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 w-full text-center sm:text-left">
+        <i data-lucide="boxes" class="w-5 h-5 mb-1 sm:mb-0"></i>
+        <span class="text-xs sm:text-sm font-medium">Magazzino & DDT</span>
+      </button>
+
+      <button onclick="switchTab('report')" id="tab-report" class="nav-btn flex flex-col sm:flex-row items-center sm:space-x-3 p-2 sm:px-3.5 sm:py-2.5 rounded-xl transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 w-full text-center sm:text-left">
+        <i data-lucide="file-spreadsheet" class="w-5 h-5 mb-1 sm:mb-0"></i>
+        <span class="text-xs sm:text-sm font-medium">Report & Cedolini</span>
+      </button>
+
+      <div class="hidden sm:block pt-4 border-t border-slate-800/80 mt-auto">
+        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800/80 text-xs text-slate-400 space-y-1">
+          <div class="flex items-center justify-between text-slate-300 font-bold">
+            <span>Stato Cloud Sync</span>
+            <span id="syncBadge" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              ● Attivo
+            </span>
+          </div>
+          <p class="text-[10px] text-slate-500">I dati sono sincronizzati in tempo reale tra Cantiere ed Ufficio.</p>
+        </div>
+      </div>
+
+    </nav>
+
+    <!-- AREA DI CONTENUTO -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 sm:pb-6 bg-slate-950">
+      
+      <!-- SEZIONE 1: CANTIERI -->
+      <section id="sec-cantieri" class="tab-content space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center space-x-2">
+              <i data-lucide="building" class="w-6 h-6 text-amber-500"></i>
+              <span>Anagrafica Cantieri</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400">Gestisci i cantieri attivi, dati cliente e responsabili di cantiere.</p>
+          </div>
+          <button onclick="openSiteModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg transition text-sm">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Nuovo Cantiere</span>
+          </button>
+        </div>
+
+        <div id="sitesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Popolato via JS -->
+        </div>
+      </section>
+
+      <!-- SEZIONE 2: REGISTRO PRESENZE -->
+      <section id="sec-presenze" class="tab-content space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center space-x-2">
+              <i data-lucide="clock" class="w-6 h-6 text-amber-500"></i>
+              <span>Registro Presenze & Ore Lavorate</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400">Inserimento ingressi, uscite, viaggi, straordinari e pause giornaliere.</p>
+          </div>
+          <div class="flex items-center space-x-3 bg-slate-900 border border-slate-800 p-2 rounded-xl">
+            <label for="presenceDate" class="text-xs font-semibold text-slate-400">Data:</label>
+            <input type="date" id="presenceDate" onchange="renderPresences()" class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-2.5 py-1 focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+          <div>
+            <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Cantiere Selezionato:</span>
+            <div id="presenceSiteName" class="text-lg font-bold text-amber-400">Cantiere...</div>
+          </div>
+          <button onclick="openPresenceModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-2 text-sm shadow transition">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            <span>Aggiungi Operaio</span>
+          </button>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-300">
+              <thead class="bg-slate-800/80 text-slate-400 uppercase text-xs">
+                <tr>
+                  <th class="px-4 py-3">Operaio / Mansione</th>
+                  <th class="px-3 py-3">Orario</th>
+                  <th class="px-3 py-3">Pausa</th>
+                  <th class="px-3 py-3">Ordinarie</th>
+                  <th class="px-3 py-3">Straordinari</th>
+                  <th class="px-3 py-3">Viaggio</th>
+                  <th class="px-3 py-3 font-bold">Totale</th>
+                  <th class="px-4 py-3 text-right">Azioni</th>
+                </tr>
+              </thead>
+              <tbody id="presenceTableBody" class="divide-y divide-slate-800">
+                <!-- Popolato via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEZIONE 3: DIARIO LAVORI CON MATERIALI UTILIZZATI -->
+      <section id="sec-diario" class="tab-content space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center space-x-2">
+              <i data-lucide="notebook" class="w-6 h-6 text-amber-500"></i>
+              <span>Diario dei Lavori & Consumo Materiali</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400">Relazione giornaliera, meteo, avanzamento % e scarico materiali usati dal magazzino.</p>
+          </div>
+          <div class="flex items-center space-x-3 bg-slate-900 border border-slate-800 p-2 rounded-xl">
+            <label for="diaryDate" class="text-xs font-semibold text-slate-400">Data:</label>
+            <input type="date" id="diaryDate" onchange="loadDiaryEntry()" class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg px-2.5 py-1 focus:ring-2 focus:ring-amber-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- FORM RELAZIONE E MATERIALI -->
+          <div class="lg:col-span-2 space-y-6">
+            
+            <!-- RELAZIONE -->
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+              <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2">
+                <i data-lucide="edit-3" class="w-4 h-4 text-amber-400"></i>
+                <span>Attività Svolte nel Cantiere</span>
+              </h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Meteo / Condizioni</label>
+                  <select id="diaryMeteo" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500">
+                    <option value="Soleggiato">☀️ Soleggiato</option>
+                    <option value="Nuvoloso">⛅ Nuvoloso</option>
+                    <option value="Pioggia">🌧️ Pioggia</option>
+                    <option value="Vento">💨 Vento Forte</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Avanzamento Lavori (%)</label>
+                  <input type="number" id="diaryProgress" min="0" max="100" placeholder="es. 35" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Descrizione Dettagliata Lavori</label>
+                <textarea id="diaryDesc" rows="4" placeholder="Inserisci il dettaglio dei lavori eseguiti oggi..." class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500"></textarea>
+              </div>
+            </div>
+
+            <!-- SELEZIONE MATERIALI UTILIZZATI IN DATA ODIERNA -->
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2">
+                  <i data-lucide="package-minus" class="w-4 h-4 text-amber-400"></i>
+                  <span>Materiali Utilizzati Oggi (Scarico Magazzino)</span>
+                </h3>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="sm:col-span-2">
+                  <label class="block text-xs text-slate-400 mb-1">Seleziona Articolo dal Magazzino</label>
+                  <select id="diaryMaterialSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-100"></select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Quantità Usata</label>
+                  <div class="flex space-x-2">
+                    <input type="number" id="diaryMaterialQty" min="1" value="1" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-100">
+                    <button onclick="addUsedMaterialToDiary()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 px-3 font-bold rounded-lg text-xs">
+                      Aggiungi
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TABELLA MATERIALI USATI OGGI -->
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-300">
+                  <thead class="bg-slate-800/60 uppercase">
+                    <tr>
+                      <th class="p-2">Articolo</th>
+                      <th class="p-2">Fornitore</th>
+                      <th class="p-2 text-right">Q.tà Scaricata</th>
+                      <th class="p-2 text-right">Azione</th>
+                    </tr>
+                  </thead>
+                  <tbody id="diaryUsedMaterialsBody" class="divide-y divide-slate-800">
+                    <!-- Popolato via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <button onclick="saveDiaryEntry()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold py-3 rounded-xl transition shadow-xl flex items-center justify-center space-x-2">
+              <i data-lucide="save" class="w-5 h-5"></i>
+              <span>Salva Giornale dei Lavori & Scarica Magazzino</span>
+            </button>
+          </div>
+
+          <!-- GALLERIA FOTO -->
+          <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2">
+                  <i data-lucide="camera" class="w-4 h-4 text-amber-400"></i>
+                  <span>Foto del Cantiere</span>
+                </h3>
+                <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-200 flex items-center space-x-1.5 transition">
+                  <i data-lucide="upload-cloud" class="w-3.5 h-3.5 text-amber-400"></i>
+                  <span>Scatta / Carica</span>
+                  <input type="file" id="diaryPhotoInput" accept="image/*" class="hidden" onchange="handleDiaryPhotoUpload(event)">
+                </label>
+              </div>
+
+              <div id="diaryPhotosContainer" class="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto p-1">
+                <!-- Foto inserite via JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEZIONE 4: MAGAZZINO & SCANSIONE DDT CON GEMINI IA -->
+      <section id="sec-magazzino" class="tab-content space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center space-x-2">
+              <i data-lucide="boxes" class="w-6 h-6 text-amber-500"></i>
+              <span>Magazzino Materiali & Scansione DDT (IA OCR)</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400">Riconoscimento automatico da foto DDT con IA Gemini Flash e tracciamento giacenze.</p>
+          </div>
+          
+          <div class="flex space-x-2">
+            <button onclick="openOcrModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg transition text-sm">
+              <i data-lucide="scan" class="w-4 h-4"></i>
+              <span>Scansiona DDT con IA</span>
+            </button>
+            <button onclick="openManualStockModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg transition text-sm">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>Nuovo Articolo</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- GIACENZE MAGAZZINO TABLE -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+          <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+            <h3 class="font-bold text-slate-200 text-sm uppercase">Giacenze di Magazzino</h3>
+            <input type="text" id="stockSearch" onkeyup="filterStockTable()" placeholder="Cerca materiale..." class="bg-slate-800 border border-slate-700 rounded-lg text-xs px-3 py-1.5 text-slate-100 focus:outline-none">
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-300">
+              <thead class="bg-slate-800/80 text-slate-400 uppercase text-xs">
+                <tr>
+                  <th class="px-4 py-3">Codice / Articolo</th>
+                  <th class="px-3 py-3">Fornitore / DDT</th>
+                  <th class="px-3 py-3 text-right">Giacenza</th>
+                  <th class="px-3 py-3 text-center">Unità</th>
+                  <th class="px-3 py-3 text-center">Stato</th>
+                  <th class="px-4 py-3 text-right">Azioni</th>
+                </tr>
+              </thead>
+              <tbody id="stockTableBody" class="divide-y divide-slate-800">
+                <!-- Popolato via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEZIONE 5: REPORT & CEDOLINI UFFICIO CONTABILITA -->
+      <section id="sec-report" class="tab-content space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center space-x-2">
+              <i data-lucide="file-spreadsheet" class="w-6 h-6 text-amber-500"></i>
+              <span>Report Ufficio, Contabilità & Export</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400">Esporta i dati cumulativi delle presenze operai e i materiali per cantiere.</p>
+          </div>
+
+          <div class="flex space-x-2">
+            <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 text-xs shadow transition">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>Esporta Excel / CSV</span>
+            </button>
+            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 text-xs shadow transition">
+              <i data-lucide="printer" class="w-4 h-4"></i>
+              <span>Stampa PDF</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- FILTRI -->
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl no-print grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Da Data:</label>
+            <input type="date" id="reportStartDate" onchange="generateReport()" class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg p-2">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">A Data:</label>
+            <input type="date" id="reportEndDate" onchange="generateReport()" class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg p-2">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Filtra Operaio:</label>
+            <select id="reportWorkerFilter" onchange="generateReport()" class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-lg p-2">
+              <option value="ALL">Tutti gli Operai</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- STAMPA REPORT CUMULATIVO -->
+        <div id="reportPrintArea" class="bg-slate-900 border border-slate-800 p-6 rounded-2xl print-area shadow-2xl space-y-6">
+          <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+            <div>
+              <h3 class="text-xl font-black text-amber-400 print:text-slate-900">PROSPETTO PRESENZE & CEDOLINO CUMULATIVO</h3>
+              <p id="reportSubTitle" class="text-xs text-slate-400 print:text-slate-600">Periodo di Riferimento</p>
+            </div>
+            <div class="text-right">
+              <span id="reportSiteName" class="font-bold text-slate-200 print:text-slate-900 block text-base">Cantiere</span>
+              <span class="text-xs text-slate-500">Elaborato da Cantieri LSP-PRO.01</span>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-300 print:text-slate-800">
+              <thead class="bg-slate-800 print:bg-slate-200 text-slate-300 print:text-slate-800 uppercase text-xs">
+                <tr>
+                  <th class="px-3 py-2">Operaio</th>
+                  <th class="px-3 py-2">Mansione</th>
+                  <th class="px-3 py-2 text-center">GG Lavorati</th>
+                  <th class="px-3 py-2 text-right">Ore Ord.</th>
+                  <th class="px-3 py-2 text-right">Straordinari</th>
+                  <th class="px-3 py-2 text-right">Viaggio</th>
+                  <th class="px-3 py-2 text-right font-bold">Totale Ore</th>
+                </tr>
+              </thead>
+              <tbody id="reportTableBody" class="divide-y divide-slate-800 print:divide-slate-300">
+                <!-- Popolato via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="hidden print:grid grid-cols-2 gap-8 pt-12 text-xs">
+            <div class="border-t border-slate-400 pt-2 text-center">Firma Responsabile Cantiere LSP</div>
+            <div class="border-t border-slate-400 pt-2 text-center">Firma Operaio per Conferma Ore</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODALE SCANSIONE DDT CON IA GEMINI -->
+  <div id="modalOcr" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center space-x-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-amber-400"></i>
+          <span>Scansione DDT con IA Gemini OCR</span>
+        </h3>
+        <button onclick="closeOcrModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Seleziona o Scatta Foto del DDT</label>
+          <input type="file" id="ocrFileInput" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-amber-400 hover:file:bg-slate-700">
+        </div>
+
+        <button onclick="processDdtOcr()" id="ocrAnalyzeBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition shadow flex items-center justify-center space-x-2 text-sm">
+          <i data-lucide="scan" class="w-4 h-4"></i>
+          <span>Riconosci Articoli con IA</span>
+        </button>
+
+        <!-- CARICAMENTO LOGO ANIMATO -->
+        <div id="ocrLoading" class="hidden text-center py-4 space-y-2">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400"></div>
+          <p class="text-xs text-amber-400 font-semibold">Gemini Flash sta leggendo il DDT...</p>
+        </div>
+
+        <!-- RISULTATI RICONOSCIUTI -->
+        <div id="ocrResults" class="hidden space-y-2 pt-2 border-t border-slate-800 max-h-60 overflow-y-auto">
+          <h4 class="text-xs font-bold text-emerald-400 uppercase">Articoli Riconosciuti nel DDT:</h4>
+          <div id="ocrItemsList" class="space-y-1 text-xs"></div>
+          <button onclick="saveOcrItemsToStock()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl text-xs mt-2">
+            Carica Tutti gli Articoli in Magazzino
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE CREAZIONE CANTIERE -->
+  <div id="modalSite" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center space-x-2">
+          <i data-lucide="building" class="w-5 h-5 text-amber-500"></i>
+          <span>Aggiungi Cantiere</span>
+        </h3>
+        <button onclick="closeSiteModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form id="formSite" onsubmit="saveSite(event)" class="space-y-3">
+        <input type="hidden" id="siteId">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Nome Cantiere *</label>
+          <input type="text" id="siteName" required placeholder="es. Impianto FV 10kW Rossi" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Codice</label>
+            <input type="text" id="siteCode" placeholder="es. CNT-01" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Stato</label>
+            <select id="siteStatus" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+              <option value="Attivo">🟢 Attivo</option>
+              <option value="Sospeso">🟡 Sospeso</option>
+              <option value="Concluso">🔴 Concluso</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Indirizzo</label>
+          <input type="text" id="siteAddress" placeholder="es. Via Roma 10, Milano" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+        </div>
+        <div class="flex justify-end space-x-3 pt-3">
+          <button type="button" onclick="closeSiteModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs">Annulla</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs">Salva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODALE REGISTRAZIONE OPERAIO -->
+  <div id="modalPresence" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center space-x-2">
+          <i data-lucide="user-check" class="w-5 h-5 text-amber-500"></i>
+          <span>Registra Presenza Operaio</span>
+        </h3>
+        <button onclick="closePresenceModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form id="formPresence" onsubmit="savePresence(event)" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Nome Operaio *</label>
+            <input type="text" id="workerName" required placeholder="Mario Rossi" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Mansione</label>
+            <select id="workerRole" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+              <option value="⚡ Elettricista">⚡ Elettricista</option>
+              <option value="🔌 Cablatore">🔌 Cablatore</option>
+              <option value="👷 Capocantiere">👷 Capocantiere</option>
+              <option value="🧱 Muratore">🧱 Muratore</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Ingresso</label>
+            <input type="time" id="timeIn" value="08:00" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-slate-100">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Uscita</label>
+            <input type="time" id="timeOut" value="17:00" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-slate-100">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Pausa (min)</label>
+            <input type="number" id="breakMinutes" value="60" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-slate-100">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Ore Viaggio</label>
+            <input type="number" id="travelHours" value="0" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Straordinario</label>
+            <input type="number" id="overtimeHours" value="0" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-3 pt-3">
+          <button type="button" onclick="closePresenceModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs">Annulla</button>
+          <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs">Salva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODALE CARICO MANUALE MAGAZZINO -->
+  <div id="modalStock" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center space-x-2">
+          <i data-lucide="package-plus" class="w-5 h-5 text-amber-500"></i>
+          <span>Carico Manuale Articolo</span>
+        </h3>
+        <button onclick="closeManualStockModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form id="formStock" onsubmit="saveManualStock(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Descrizione Articolo *</label>
+          <input type="text" id="stockDesc" required placeholder="es. Cavo Solare 6mmq" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Quantità *</label>
+            <input type="number" id="stockQty" required value="1" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Unità</label>
+            <input type="text" id="stockUnit" placeholder="metri / pz" value="pz" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Fornitore</label>
+            <input type="text" id="stockSupplier" placeholder="Sacchi Srl" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-100">
+          </div>
+        </div>
+        <div class="flex justify-end space-x-3 pt-3">
+          <button type="button" onclick="closeManualStockModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs">Annulla</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs">Inserisci</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CORE LOGIC JS -->
+  <script>
+    // STATO APPLICAZIONE CON MEMORIA LOCALE / CLOUD
+    let state = {
+      userRole: 'cantiere', // 'cantiere' o 'ufficio'
+      activeSiteId: null,
+      sites: [],
+      presences: [],
+      diaries: [],
+      stock: [], // { id, desc, qty, unit, supplier, ddtNum, minStock }
+      ocrTempItems: []
+    };
+
+    let dbInstance = null;
+
+    // INIZIALIZZAZIONE AL CARICAMENTO
+    window.addEventListener('DOMContentLoaded', () => {
+      // Inizializzazione Firebase o Local Fallback
+      if (window.FirebaseApp) {
+        window.FirebaseApp.init((db) => {
+          if (db) {
+            dbInstance = db;
+            setupRealtimeFirebase();
+          } else {
+            loadLocalData();
+          }
+        });
+      } else {
+        loadLocalData();
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('presenceDate').value = today;
+      document.getElementById('diaryDate').value = today;
+      document.getElementById('reportStartDate').value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+      document.getElementById('reportEndDate').value = today;
+
+      lucide.createIcons();
+      switchTab('cantieri');
+    });
+
+    // DATI DEMO DI BASE
+    function loadLocalData() {
+      const saved = localStorage.getItem('cantieri_lsp_data');
+      if (saved) {
+        try { state = JSON.parse(saved); } catch(e){}
+      }
+
+      if (!state.sites || state.sites.length === 0) {
+        state.sites = [
+          { id: 'site_1', name: 'Impianto FV 10kW & LUNA2000 20kWh', code: 'LSP-MIL-01', address: 'Via Garibaldi, Milano', status: 'Attivo' }
+        ];
+        state.activeSiteId = 'site_1';
+        
+        // Stock iniziale
+        state.stock = [
+          { id: 'stk_1', desc: 'Inverter Huawei SUN2000-10KTL-M1', qty: 2, unit: 'pz', supplier: 'Sacchi', ddtNum: 'DDT-102', minStock: 1 },
+          { id: 'stk_2', desc: 'Batteria Huawei LUNA2000 5kWh Module', qty: 8, unit: 'pz', supplier: 'Sacchi', ddtNum: 'DDT-102', minStock: 2 },
+          { id: 'stk_3', desc: 'Pannelli FV 455W Monocristallino', qty: 44, unit: 'pz', supplier: 'VP Solar', ddtNum: 'DDT-889', minStock: 10 },
+          { id: 'stk_4', desc: 'Cavo Solare 6mmq Rosso/Nero', qty: 350, unit: 'm', supplier: 'Sacchi', ddtNum: 'DDT-102', minStock: 50 }
+        ];
+        saveLocalData();
+      }
+      renderAllUI();
+    }
+
+    function saveLocalData() {
+      localStorage.setItem('cantieri_lsp_data', JSON.stringify(state));
+      if (dbInstance && window.FirebaseApp.user) {
+        // Sync verso Firestore
+        const docRef = doc(dbInstance, 'artifacts', window.FirebaseApp.appId, 'public', 'data', 'app_state', 'current');
+        setDoc(docRef, state).catch(err => console.error("Firestore write err:", err));
+      }
+    }
+
+    function setupRealtimeFirebase() {
+      const collectionRef = collection(dbInstance, 'artifacts', window.FirebaseApp.appId, 'public', 'data', 'app_state');
+      onSnapshot(collectionRef, (snapshot) => {
+        snapshot.forEach(doc => {
+          if (doc.id === 'current') {
+            const data = doc.data();
+            if (data) {
+              state = data;
+              renderAllUI();
+            }
+          }
+        });
+      }, (err) => console.error("Firebase sync error", err));
+    }
+
+    function setUserRole(role) {
+      state.userRole = role;
+      document.getElementById('roleBtnCantiere').className = role === 'cantiere' ? 'px-2.5 py-1 rounded-md font-semibold transition bg-amber-500 text-slate-950' : 'px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition';
+      document.getElementById('roleBtnUfficio').className = role === 'ufficio' ? 'px-2.5 py-1 rounded-md font-semibold transition bg-amber-500 text-slate-950' : 'px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition';
+    }
+
+    function renderAllUI() {
+      updateActiveSiteUI();
+      renderSites();
+      renderPresences();
+      loadDiaryEntry();
+      renderStockTable();
+      generateReport();
+    }
+
+    function changeActiveSite(id) {
+      state.activeSiteId = id;
+      saveLocalData();
+      renderAllUI();
+    }
+
+    function updateActiveSiteUI() {
+      const select = document.getElementById('activeSiteSelect');
+      select.innerHTML = state.sites.map(s => 
+        `<option value="${s.id}" ${s.id === state.activeSiteId ? 'selected' : ''}>${s.name}</option>`
+      ).join('');
+
+      const active = state.sites.find(s => s.id === state.activeSiteId);
+      document.getElementById('presenceSiteName').innerText = active ? active.name : 'Seleziona Cantiere';
+      document.getElementById('reportSiteName').innerText = active ? active.name : 'Cantiere';
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('bg-amber-500/10', 'text-amber-500', 'font-bold'));
+
+      document.getElementById(`sec-${tabId}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-${tabId}`);
+      if(activeBtn) activeBtn.classList.add('bg-amber-500/10', 'text-amber-500', 'font-bold');
+
+      if(tabId === 'diario') populateDiaryMaterialSelect();
+      lucide.createIcons();
+    }
+
+    // ==========================================
+    // 1. CANTIERI LOGIC
+    // ==========================================
+    function renderSites() {
+      const container = document.getElementById('sitesList');
+      if (state.sites.length === 0) {
+        container.innerHTML = `<div class="col-span-3 text-center py-6 text-slate-500">Nessun cantiere presente.</div>`;
+        return;
+      }
+
+      container.innerHTML = state.sites.map(s => {
+        const isSel = s.id === state.activeSiteId;
+        return `
+          <div class="bg-slate-900 border ${isSel ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-800'} rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-3">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">${s.code || 'CNT'}</span>
+                <span class="text-xs text-emerald-400">● ${s.status}</span>
+              </div>
+              <h3 class="font-bold text-slate-100 text-base mb-1">${s.name}</h3>
+              <p class="text-xs text-slate-400">${s.address || 'N/D'}</p>
+            </div>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+              <button onclick="changeActiveSite('${s.id}')" class="text-xs font-bold text-amber-400 flex items-center space-x-1">
+                <i data-lucide="${isSel ? 'check-circle-2' : 'circle'}" class="w-4 h-4"></i>
+                <span>${isSel ? 'Selezionato' : 'Seleziona'}</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function openSiteModal() { document.getElementById('modalSite').classList.remove('hidden'); }
+    function closeSiteModal() { document.getElementById('modalSite').classList.add('hidden'); }
+    function saveSite(e) {
+      e.preventDefault();
+      const newS = {
+        id: 'site_' + Date.now(),
+        name: document.getElementById('siteName').value,
+        code: document.getElementById('siteCode').value,
+        status: document.getElementById('siteStatus').value,
+        address: document.getElementById('siteAddress').value
+      };
+      state.sites.push(newS);
+      if (!state.activeSiteId) state.activeSiteId = newS.id;
+      saveLocalData();
+      renderAllUI();
+      closeSiteModal();
+    }
+
+    // ==========================================
+    // 2. PRESENZE OPERAI LOGIC
+    // ==========================================
+    function renderPresences() {
+      const date = document.getElementById('presenceDate').value;
+      const body = document.getElementById('presenceTableBody');
+      const filtered = state.presences.filter(p => p.siteId === state.activeSiteId && p.date === date);
+
+      if (filtered.length === 0) {
+        body.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-500">Nessuna presenza in data ${date}.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = filtered.map(p => `
+        <tr class="hover:bg-slate-800/50">
+          <td class="px-4 py-3 font-medium text-slate-100">${p.workerName}<span class="block text-xs text-amber-400">${p.role}</span></td>
+          <td class="px-3 py-3 text-xs font-mono text-slate-400">${p.timeIn} - ${p.timeOut}</td>
+          <td class="px-3 py-3 text-xs font-mono text-slate-400">${p.breakMin}m</td>
+          <td class="px-3 py-3 font-bold text-emerald-400 font-mono">${p.ordHours}h</td>
+          <td class="px-3 py-3 text-amber-400 font-mono">${p.overtime}h</td>
+          <td class="px-3 py-3 text-indigo-400 font-mono">${p.travelHours}h</td>
+          <td class="px-3 py-3 font-bold text-slate-100 font-mono">${p.totalHours}h</td>
+          <td class="px-4 py-3 text-right">
+            <button onclick="deletePresence('${p.id}')" class="text-rose-400 hover:text-rose-300 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function openPresenceModal() { document.getElementById('modalPresence').classList.remove('hidden'); }
+    function closePresenceModal() { document.getElementById('modalPresence').classList.add('hidden'); }
+    function savePresence(e) {
+      e.preventDefault();
+      const date = document.getElementById('presenceDate').value;
+      const timeIn = document.getElementById('timeIn').value;
+      const timeOut = document.getElementById('timeOut').value;
+      const breakMin = parseInt(document.getElementById('breakMinutes').value || 0);
+      const travelHours = parseFloat(document.getElementById('travelHours').value || 0);
+      const overtime = parseFloat(document.getElementById('overtimeHours').value || 0);
+
+      const [inH, inM] = timeIn.split(':').map(Number);
+      const [outH, outM] = timeOut.split(':').map(Number);
+      let diff = (outH * 60 + outM) - (inH * 60 + inM) - breakMin;
+      if(diff < 0) diff = 0;
+
+      const ordHours = parseFloat((diff / 60).toFixed(2));
+      const totalHours = parseFloat((ordHours + overtime + travelHours).toFixed(2));
+
+      state.presences.push({
+        id: 'pres_' + Date.now(),
+        siteId: state.activeSiteId,
+        date,
+        workerName: document.getElementById('workerName').value,
+        role: document.getElementById('workerRole').value,
+        timeIn, timeOut, breakMin, ordHours, overtime, travelHours, totalHours
+      });
+
+      saveLocalData();
+      renderPresences();
+      closePresenceModal();
+    }
+
+    function deletePresence(id) {
+      state.presences = state.presences.filter(p => p.id !== id);
+      saveLocalData();
+      renderPresences();
+    }
+
+    // ==========================================
+    // 3. DIARIO LAVORI CON MATERIALI SCARICATI
+    // ==========================================
+    function populateDiaryMaterialSelect() {
+      const select = document.getElementById('diaryMaterialSelect');
+      if(!state.stock || state.stock.length === 0) {
+        select.innerHTML = `<option value="">Nessun articolo disponibile in magazzino</option>`;
+        return;
+      }
+      select.innerHTML = state.stock.map(s => 
+        `<option value="${s.id}">${s.desc} (Giacenza: ${s.qty} ${s.unit})</option>`
+      ).join('');
+    }
+
+    function addUsedMaterialToDiary() {
+      const stockId = document.getElementById('diaryMaterialSelect').value;
+      const qtyUsed = parseFloat(document.getElementById('diaryMaterialQty').value || 1);
+      const date = document.getElementById('diaryDate').value;
+
+      const stockItem = state.stock.find(s => s.id === stockId);
+      if(!stockItem) return;
+
+      if(stockItem.qty < qtyUsed) {
+        alert(`Quantità non sufficiente in magazzino! Giacenza attuale: ${stockItem.qty}`);
+        return;
+      }
+
+      // Trova o crea voce diario
+      let diary = state.diaries.find(d => d.siteId === state.activeSiteId && d.date === date);
+      if (!diary) {
+        diary = { siteId: state.activeSiteId, date, meteo: 'Soleggiato', progress: 0, desc: '', photos: [], usedMaterials: [] };
+        state.diaries.push(diary);
+      }
+      if (!diary.usedMaterials) diary.usedMaterials = [];
+
+      // Scarica dal magazzino
+      stockItem.qty -= qtyUsed;
+
+      diary.usedMaterials.push({
+        stockId: stockItem.id,
+        desc: stockItem.desc,
+        supplier: stockItem.supplier,
+        qty: qtyUsed,
+        unit: stockItem.unit
+      });
+
+      saveLocalData();
+      renderUsedMaterialsInDiary(diary.usedMaterials);
+      renderStockTable();
+      populateDiaryMaterialSelect();
+    }
+
+    function renderUsedMaterialsInDiary(materials = []) {
+      const body = document.getElementById('diaryUsedMaterialsBody');
+      if (materials.length === 0) {
+        body.innerHTML = `<tr><td colspan="4" class="text-center py-3 text-slate-500">Nessun materiale scaricato oggi.</td></tr>`;
+        return;
+      }
+      body.innerHTML = materials.map((m, idx) => `
+        <tr>
+          <td class="p-2 text-slate-200 font-medium">${m.desc}</td>
+          <td class="p-2 text-slate-400">${m.supplier || 'N/D'}</td>
+          <td class="p-2 text-right font-bold text-amber-400 font-mono">-${m.qty} ${m.unit}</td>
+          <td class="p-2 text-right">
+            <button onclick="removeUsedMaterialFromDiary(${idx})" class="text-rose-400 hover:text-rose-300 p-0.5"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+          </td>
+        </tr>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function removeUsedMaterialFromDiary(idx) {
+      const date = document.getElementById('diaryDate').value;
+      let diary = state.diaries.find(d => d.siteId === state.activeSiteId && d.date === date);
+      if (diary && diary.usedMaterials) {
+        const item = diary.usedMaterials[idx];
+        const stockItem = state.stock.find(s => s.id === item.stockId);
+        if (stockItem) stockItem.qty += item.qty; // Ripristina magazzino
+
+        diary.usedMaterials.splice(idx, 1);
+        saveLocalData();
+        renderUsedMaterialsInDiary(diary.usedMaterials);
+        renderStockTable();
+        populateDiaryMaterialSelect();
+      }
+    }
+
+    function loadDiaryEntry() {
+      const date = document.getElementById('diaryDate').value;
+      const diary = state.diaries.find(d => d.siteId === state.activeSiteId && d.date === date);
+
+      if (diary) {
+        document.getElementById('diaryMeteo').value = diary.meteo || 'Soleggiato';
+        document.getElementById('diaryProgress').value = diary.progress || 0;
+        document.getElementById('diaryDesc').value = diary.desc || '';
+        renderDiaryPhotos(diary.photos || []);
+        renderUsedMaterialsInDiary(diary.usedMaterials || []);
+      } else {
+        document.getElementById('diaryMeteo').value = 'Soleggiato';
+        document.getElementById('diaryProgress').value = '';
+        document.getElementById('diaryDesc').value = '';
+        renderDiaryPhotos([]);
+        renderUsedMaterialsInDiary([]);
+      }
+      populateDiaryMaterialSelect();
+    }
+
+    function saveDiaryEntry() {
+      const date = document.getElementById('diaryDate').value;
+      let diary = state.diaries.find(d => d.siteId === state.activeSiteId && d.date === date);
+
+      if (!diary) {
+        diary = { siteId: state.activeSiteId, date, usedMaterials: [], photos: [] };
+        state.diaries.push(diary);
+      }
+
+      diary.meteo = document.getElementById('diaryMeteo').value;
+      diary.progress = document.getElementById('diaryProgress').value;
+      diary.desc = document.getElementById('diaryDesc').value;
+
+      saveLocalData();
+      alert('Diario dei lavori e scarico magazzino salvati!');
+    }
+
+    function handleDiaryPhotoUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const date = document.getElementById('diaryDate').value;
+        let diary = state.diaries.find(d => d.siteId === state.activeSiteId && d.date === date);
+        if(!diary) {
+          diary = { siteId: state.activeSiteId, date, photos: [], usedMaterials: [] };
+          state.diaries.push(diary);
+        }
+        if(!diary.photos) diary.photos = [];
+        diary.photos.push(evt.target.result);
+        saveLocalData();
+        renderDiaryPhotos(diary.photos);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function renderDiaryPhotos(photos = []) {
+      const container = document.getElementById('diaryPhotosContainer');
+      if (photos.length === 0) {
+        container.innerHTML = `<p class="col-span-2 text-center text-xs text-slate-500 py-6">Nessuna foto inserita.</p>`;
+        return;
+      }
+      container.innerHTML = photos.map((p, i) => `
+        <div class="relative rounded-lg overflow-hidden border border-slate-700 h-24">
+          <img src="${p}" class="w-full h-full object-cover">
+        </div>
+      `).join('');
+    }
+
+    // ==========================================
+    // 4. MAGAZZINO & IA SCANSIONE DDT GEMINI
+    // ==========================================
+    function renderStockTable() {
+      const body = document.getElementById('stockTableBody');
+      if (!state.stock || state.stock.length === 0) {
+        body.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500">Magazzino vuoto. Effettua una scansione DDT con IA.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = state.stock.map(s => {
+        const isLow = s.qty <= (s.minStock || 2);
+        return `
+          <tr class="hover:bg-slate-800/50">
+            <td class="px-4 py-3 font-medium text-slate-100">${s.desc}</td>
+            <td class="px-3 py-3 text-xs text-slate-400">${s.supplier || 'N/D'} ${s.ddtNum ? '(' + s.ddtNum + ')' : ''}</td>
+            <td class="px-3 py-3 text-right font-bold text-amber-400 font-mono">${s.qty}</td>
+            <td class="px-3 py-3 text-center text-xs text-slate-400">${s.unit || 'pz'}</td>
+            <td class="px-3 py-3 text-center">
+              ${isLow ? '<span class="bg-rose-500/10 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-500/20">Sotto Scorta</span>' : '<span class="bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded">Disponibile</span>'}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="deleteStockItem('${s.id}')" class="text-rose-400 hover:text-rose-300 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function openManualStockModal() { document.getElementById('modalStock').classList.remove('hidden'); }
+    function closeManualStockModal() { document.getElementById('modalStock').classList.add('hidden'); }
+    function saveManualStock(e) {
+      e.preventDefault();
+      state.stock.push({
+        id: 'stk_' + Date.now(),
+        desc: document.getElementById('stockDesc').value,
+        qty: parseFloat(document.getElementById('stockQty').value || 1),
+        unit: document.getElementById('stockUnit').value || 'pz',
+        supplier: document.getElementById('stockSupplier').value || 'Generico',
+        minStock: 2
+      });
+      saveLocalData();
+      renderStockTable();
+      closeManualStockModal();
+    }
+
+    function deleteStockItem(id) {
+      state.stock = state.stock.filter(s => s.id !== id);
+      saveLocalData();
+      renderStockTable();
+    }
+
+    function openOcrModal() {
+      document.getElementById('ocrResults').classList.add('hidden');
+      document.getElementById('modalOcr').classList.remove('hidden');
+    }
+    function closeOcrModal() { document.getElementById('modalOcr').classList.add('hidden'); }
+
+    // CHIAMATA API GEMINI FLASH PER LETTURA DDT OCR
+    async function processDdtOcr() {
+      const fileInput = document.getElementById('ocrFileInput');
+      if (!fileInput.files || !fileInput.files[0]) {
+        alert("Carica prima l'immagine del DDT o della Bolla!");
+        return;
+      }
+
+      const loading = document.getElementById('ocrLoading');
+      const resultsDiv = document.getElementById('ocrResults');
+      loading.classList.remove('hidden');
+      resultsDiv.classList.add('hidden');
+
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async function(e) {
+        const base64Data = e.target.result.split(',')[1];
+        const prompt = "Analizza questa immagine di un Documento di Trasporto (DDT) o Bolla di Consegna. Estrai la lista di tutti gli articoli/materiali forniti. Per ciascun articolo estrai: descrizione (desc), quantità (qty), unità di misura (unit) e nome del fornitore (supplier). Rispondi ESCLUSIVAMENTE in formato JSON con la seguente struttura: [{\"desc\": \"...\", \"qty\": 10, \"unit\": \"m\", \"supplier\": \"...\"}]";
+
+        try {
+          const apiKey = ""; // API Key automatica di sistema
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                role: 'user',
+                parts: [
+                  { text: prompt },
+                  { inlineData: { mimeType: file.type || 'image/png', data: base64Data } }
+                ]
+              }],
+              generationConfig: { responseMimeType: "application/json" }
+            })
+          });
+
+          const result = await response.json();
+          const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          
+          if (jsonText) {
+            const parsedItems = JSON.parse(jsonText);
+            state.ocrTempItems = parsedItems;
+            
+            const listContainer = document.getElementById('ocrItemsList');
+            listContainer.innerHTML = parsedItems.map(item => `
+              <div class="bg-slate-800 p-2 rounded flex justify-between items-center">
+                <span><strong>${item.desc}</strong> (${item.supplier || 'Fornitore'})</span>
+                <span class="text-amber-400 font-bold">${item.qty} ${item.unit || 'pz'}</span>
+              </div>
+            `).join('');
+
+            resultsDiv.classList.remove('hidden');
+          } else {
+            alert("Nessun articolo riconosciuto chiaramente nel DDT. Riprova con una foto più nitida.");
+          }
+        } catch (err) {
+          console.error("Errore OCR Gemini:", err);
+          alert("Errore nell'analisi del DDT con IA. Assicurati che l'immagine sia leggibile.");
+        } finally {
+          loading.classList.add('hidden');
+        }
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    function saveOcrItemsToStock() {
+      if (!state.ocrTempItems || state.ocrTempItems.length === 0) return;
+
+      state.ocrTempItems.forEach(item => {
+        state.stock.push({
+          id: 'stk_' + Date.now() + Math.random().toString(36).substr(2, 4),
+          desc: item.desc,
+          qty: parseFloat(item.qty || 1),
+          unit: item.unit || 'pz',
+          supplier: item.supplier || 'DDT Scansionato',
+          minStock: 2
+        });
+      });
+
+      saveLocalData();
+      renderStockTable();
+      closeOcrModal();
+      alert("Articoli del DDT caricati con successo nel Magazzino!");
+    }
+
+    // ==========================================
+    // 5. REPORT & EXPORT EXCEL/CSV
+    // ==========================================
+    function generateReport() {
+      const start = document.getElementById('reportStartDate').value;
+      const end = document.getElementById('reportEndDate').value;
+      const workerFilter = document.getElementById('reportWorkerFilter').value;
+
+      const workerSelect = document.getElementById('reportWorkerFilter');
+      const uniqueWorkers = [...new Set(state.presences.map(p => p.workerName))];
+      workerSelect.innerHTML = `<option value="ALL">Tutti gli Operai</option>` + 
+        uniqueWorkers.map(w => `<option value="${w}" ${w === workerFilter ? 'selected' : ''}>${w}</option>`).join('');
+
+      document.getElementById('reportSubTitle').innerText = `Periodo: dal ${start || 'Inizio'} al ${end || 'Oggi'}`;
+
+      const filtered = state.presences.filter(p => {
+        if (p.siteId !== state.activeSiteId) return false;
+        if (start && p.date < start) return false;
+        if (end && p.date > end) return false;
+        if (workerFilter !== 'ALL' && p.workerName !== workerFilter) return false;
+        return true;
+      });
+
+      const totals = {};
+      filtered.forEach(p => {
+        if(!totals[p.workerName]) totals[p.workerName] = { role: p.role, days: 0, ord: 0, overtime: 0, travel: 0, total: 0 };
+        totals[p.workerName].days += 1;
+        totals[p.workerName].ord += p.ordHours;
+        totals[p.workerName].overtime += p.overtime;
+        totals[p.workerName].travel += p.travelHours;
+        totals[p.workerName].total += p.totalHours;
+      });
+
+      const body = document.getElementById('reportTableBody');
+      const keys = Object.keys(totals);
+      if(keys.length === 0) {
+        body.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500">Nessun dato presenze trovato per i filtri impostati.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = keys.map(w => {
+        const item = totals[w];
+        return `
+          <tr class="border-b border-slate-800">
+            <td class="px-3 py-2.5 font-bold text-slate-100 print:text-slate-900">${w}</td>
+            <td class="px-3 py-2.5 text-xs text-amber-400 print:text-slate-700">${item.role}</td>
+            <td class="px-3 py-2.5 text-center font-mono">${item.days} gg</td>
+            <td class="px-3 py-2.5 text-right font-mono text-emerald-400 print:text-slate-900">${item.ord.toFixed(2)}h</td>
+            <td class="px-3 py-2.5 text-right font-mono text-amber-400 print:text-slate-900">${item.overtime.toFixed(2)}h</td>
+            <td class="px-3 py-2.5 text-right font-mono text-indigo-400 print:text-slate-900">${item.travel.toFixed(2)}h</td>
+            <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-100 print:text-slate-900">${item.total.toFixed(2)}h</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ESPORTAZIONE CSV PER EXCEL / UFFICIO
+    function exportToCSV() {
+      const activeSite = state.sites.find(s => s.id === state.activeSiteId);
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += `PROSPETTO PRESENZE CANTIERE - ${activeSite ? activeSite.name : ''}\n`;
+      csvContent += "Operaio;Mansione;Data;Ingresso;Uscita;Ore Ordinarie;Straordinario;Viaggio;Totale Ore\n";
+
+      const filtered = state.presences.filter(p => p.siteId === state.activeSiteId);
+      filtered.forEach(p => {
+        csvContent += `"${p.workerName}";"${p.role}";"${p.date}";"${p.timeIn}";"${p.timeOut}";"${p.ordHours}";"${p.overtime}";"${p.travelHours}";"${p.totalHours}"\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Report_Presenze_${activeSite ? activeSite.code : 'Cantiere'}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
